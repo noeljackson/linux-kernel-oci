@@ -8,56 +8,74 @@ KERNEL_DIR="$(realpath "${PWD}")"
 # shellcheck source-path=SCRIPTDIR source=common.sh
 . "${KERNEL_DIR}/hack/build/common.sh"
 
-make -C "${KERNEL_OBJ}" ARCH="${TARGET_ARCH_KERNEL}" -j"${KERNEL_BUILD_JOBS}" "${CROSS_COMPILE_MAKE}" "${IMAGE_TARGET}" modules
+# Detect if modules are enabled in this config (isol8 uses MODULES=n)
+HAS_MODULES="1"
+if grep -q '^CONFIG_MODULES=n' "${KERNEL_OBJ}/.config" 2>/dev/null; then
+	HAS_MODULES="0"
+elif grep -q '^# CONFIG_MODULES is not set' "${KERNEL_OBJ}/.config" 2>/dev/null; then
+	HAS_MODULES="0"
+fi
+
+if [ "${HAS_MODULES}" = "1" ]; then
+	make -C "${KERNEL_OBJ}" ARCH="${TARGET_ARCH_KERNEL}" -j"${KERNEL_BUILD_JOBS}" "${CROSS_COMPILE_MAKE}" "${IMAGE_TARGET}" modules
+else
+	make -C "${KERNEL_OBJ}" ARCH="${TARGET_ARCH_KERNEL}" -j"${KERNEL_BUILD_JOBS}" "${CROSS_COMPILE_MAKE}" "${IMAGE_TARGET}"
+fi
 
 rm -rf "${MODULES_INSTALL_PATH}"
 rm -rf "${ADDONS_OUTPUT_PATH}"
 rm -rf "${ADDONS_SQUASHFS_PATH}"
 rm -rf "${METADATA_PATH}"
 
-make -C "${KERNEL_OBJ}" ARCH="${TARGET_ARCH_KERNEL}" -j"${KERNEL_BUILD_JOBS}" "${CROSS_COMPILE_MAKE}" INSTALL_MOD_STRIP=1 INSTALL_MOD_PATH="${MODULES_INSTALL_PATH}" modules_install
-KERNEL_MODULES_VER="$(ls "${MODULES_INSTALL_PATH}/lib/modules")"
+if [ "${HAS_MODULES}" = "1" ]; then
+	make -C "${KERNEL_OBJ}" ARCH="${TARGET_ARCH_KERNEL}" -j"${KERNEL_BUILD_JOBS}" "${CROSS_COMPILE_MAKE}" INSTALL_MOD_STRIP=1 INSTALL_MOD_PATH="${MODULES_INSTALL_PATH}" modules_install
+	KERNEL_MODULES_VER="$(ls "${MODULES_INSTALL_PATH}/lib/modules")"
 
-mkdir -p "${ADDONS_OUTPUT_PATH}"
+	mkdir -p "${ADDONS_OUTPUT_PATH}"
 
-# shellcheck source-path=SCRIPTDIR source=nvidiagpu-common.sh
-. "${KERNEL_DIR}/hack/build/nvidiagpu-common.sh"
+	# shellcheck source-path=SCRIPTDIR source=nvidiagpu-common.sh
+	. "${KERNEL_DIR}/hack/build/nvidiagpu-common.sh"
 
-# shellcheck source-path=SCRIPTDIR source=firmware.sh
-. "${KERNEL_DIR}/hack/build/firmware.sh"
+	# shellcheck source-path=SCRIPTDIR source=firmware.sh
+	. "${KERNEL_DIR}/hack/build/firmware.sh"
 
-mv "${MODULES_INSTALL_PATH}/lib/modules/${KERNEL_MODULES_VER}" "${MODULES_OUTPUT_PATH}"
-rm -rf "${MODULES_INSTALL_PATH}"
-[ -L "${MODULES_OUTPUT_PATH}/build" ] && unlink "${MODULES_OUTPUT_PATH}/build"
+	mv "${MODULES_INSTALL_PATH}/lib/modules/${KERNEL_MODULES_VER}" "${MODULES_OUTPUT_PATH}"
+	rm -rf "${MODULES_INSTALL_PATH}"
+	[ -L "${MODULES_OUTPUT_PATH}/build" ] && unlink "${MODULES_OUTPUT_PATH}/build"
 
-mksquashfs "${ADDONS_OUTPUT_PATH}" "${ADDONS_SQUASHFS_PATH}" -all-root
+	mksquashfs "${ADDONS_OUTPUT_PATH}" "${ADDONS_SQUASHFS_PATH}" -all-root
 
-SQUASH_SIZE=$(stat -c %s "${ADDONS_SQUASHFS_PATH}")
+	SQUASH_SIZE=$(stat -c %s "${ADDONS_SQUASHFS_PATH}")
 
-# Host kernel size matters less, but we still don't want it to massively balloon all of a sudden.
-case "$KERNEL_FLAVOR" in
-    host*)
-        if [ "${SQUASH_SIZE}" -gt 419430400 ]; then
-            echo "ERROR: squashfs is >400MB in size (${SQUASH_SIZE} bytes) which is undesirable for the 'host' kernel, validate kconfig options!" >&2
-            exit 1
-        fi
-        ;;
-esac
+	# Host kernel size matters less, but we still don't want it to massively balloon all of a sudden.
+	case "$KERNEL_FLAVOR" in
+	    host*)
+	        if [ "${SQUASH_SIZE}" -gt 419430400 ]; then
+	            echo "ERROR: squashfs is >400MB in size (${SQUASH_SIZE} bytes) which is undesirable for the 'host' kernel, validate kconfig options!" >&2
+	            exit 1
+	        fi
+	        ;;
+	esac
 
-# Generally we want to keep zone kernels small, because large kernels -> longer pull times -> increased zone cold boot times.
-# We don't really care how big the host kernel is.
-# Nvidia kernels have chonker firmwares, even compressed (like 200MB total size), so not much we can really do there.
-case "$KERNEL_FLAVOR" in
-    zone-nvidiagpu)
-        # Firmware means this is unavoidably quite large
-        ;;
-    zone*)
-        if [ "${SQUASH_SIZE}" -gt 52428800 ]; then
-            echo "ERROR: squashfs is >50MB in size (${SQUASH_SIZE} bytes) which is undesirable for the 'zone' kernel, validate kconfig options!" >&2
-            exit 1
-        fi
-        ;;
-esac
+	# Generally we want to keep zone kernels small, because large kernels -> longer pull times -> increased zone cold boot times.
+	# We don't really care how big the host kernel is.
+	# Nvidia kernels have chonker firmwares, even compressed (like 200MB total size), so not much we can really do there.
+	case "$KERNEL_FLAVOR" in
+	    zone-nvidiagpu)
+	        # Firmware means this is unavoidably quite large
+	        ;;
+	    zone*)
+	        if [ "${SQUASH_SIZE}" -gt 52428800 ]; then
+	            echo "ERROR: squashfs is >50MB in size (${SQUASH_SIZE} bytes) which is undesirable for the 'zone' kernel, validate kconfig options!" >&2
+	            exit 1
+	        fi
+	        ;;
+	esac
+else
+	# No modules — create empty addons squashfs for compatibility
+	mkdir -p "${ADDONS_OUTPUT_PATH}"
+	mksquashfs "${ADDONS_OUTPUT_PATH}" "${ADDONS_SQUASHFS_PATH}" -all-root
+fi
 
 if [ "${TARGET_ARCH_STANDARD}" = "x86_64" ]; then
 	cp "${KERNEL_OBJ}/arch/x86/boot/bzImage" "${OUTPUT_DIR}/kernel"
@@ -66,6 +84,14 @@ elif [ "${TARGET_ARCH_STANDARD}" = "aarch64" ]; then
 else
 	echo "ERROR: unable to determine what file is the vmlinuz for ${TARGET_ARCH_STANDARD}" >&2
 	exit 1
+fi
+
+# For PV-only flavors, copy vmlinux (ELF) for Xen PV domain boot.
+# Other flavors get an empty placeholder so Dockerfile COPY doesn't fail.
+if [ "${KERNEL_FLAVOR}" = "isol8" ]; then
+	cp "${KERNEL_OBJ}/vmlinux" "${OUTPUT_DIR}/vmlinux"
+else
+	touch "${OUTPUT_DIR}/vmlinux"
 fi
 
 rm -rf "${ADDONS_OUTPUT_PATH}"
@@ -77,7 +103,12 @@ mkdir -p "${SDK_OUTPUT_PATH}"
 
 cp -a "${KERNEL_OBJ}/.config" "${SDK_OUTPUT_PATH}/.config"
 install -D -t "${SDK_OUTPUT_PATH}"/certs "${KERNEL_OBJ}"/certs/signing_key.x509 || :
-make -C "${KERNEL_SRC}" O="${SDK_OUTPUT_PATH}" ARCH="${TARGET_ARCH_KERNEL}" -j"${KERNEL_BUILD_JOBS}" "${CROSS_COMPILE_MAKE}" prepare modules_prepare scripts
+
+if [ "${HAS_MODULES}" = "1" ]; then
+	make -C "${KERNEL_SRC}" O="${SDK_OUTPUT_PATH}" ARCH="${TARGET_ARCH_KERNEL}" -j"${KERNEL_BUILD_JOBS}" "${CROSS_COMPILE_MAKE}" prepare modules_prepare scripts
+else
+	make -C "${KERNEL_SRC}" O="${SDK_OUTPUT_PATH}" ARCH="${TARGET_ARCH_KERNEL}" -j"${KERNEL_BUILD_JOBS}" "${CROSS_COMPILE_MAKE}" prepare scripts
+fi
 
 # Delete links to "real" kernel sources as we will copy them in place as needed.
 rm "${SDK_OUTPUT_PATH}"/Makefile "${SDK_OUTPUT_PATH}"/source

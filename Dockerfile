@@ -62,6 +62,7 @@ COPY --from=build /build/target/kernel /kernel/image
 COPY --from=build /build/target/config.gz /kernel/config.gz
 COPY --from=build /build/target/addons.squashfs /kernel/addons.squashfs
 COPY --from=build /build/target/metadata /kernel/metadata
+COPY --from=build /build/target/vmlinux /kernel/vmlinux
 
 FROM scratch AS kernel
 COPY --from=kernelcopy /kernel /kernel

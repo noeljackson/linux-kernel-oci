@@ -128,7 +128,9 @@ find "arch/${PRUNE_ARCH}" -name include -type d -print | while IFS='' read -r fo
 done | sort -u | cpio -pdm "${SDK_OUTPUT_PATH}"
 cd "${KERNEL_DIR}"
 
-install -Dm644 "${KERNEL_OBJ}"/Module.symvers "${SDK_OUTPUT_PATH}"/Module.symvers
+if [ -f "${KERNEL_OBJ}/Module.symvers" ]; then
+	install -Dm644 "${KERNEL_OBJ}"/Module.symvers "${SDK_OUTPUT_PATH}"/Module.symvers
+fi
 
 rm -r "${SDK_OUTPUT_PATH}"/Documentation
 find "${SDK_OUTPUT_PATH}" -type f -name '*.o' -printf 'Removing %P\n' -delete

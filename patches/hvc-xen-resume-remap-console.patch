@@ -1,0 +1,62 @@
+commit 0000000000000000000000000000000000000000
+Author: Noel Jackson <noel@codewire.sh>
+Date:   Sun Mar 23 2026 +0000
+
+    hvc_xen: re-map PV console page on resume after domain restore
+
+    xc_domain_restore rewrites start_info->console.domU.mfn with the new
+    console page allocated for the restored domain. However,
+    xen_console_resume() only rebinds the event channel — it never re-reads
+    start_info, leaving info->intf pointing at the stale pre-save page.
+
+    Factor the PV start_info read into xen_console_update_pv() and call it
+    from both xencons_info_pv_init() (boot) and xen_console_resume()
+    (restore), so the two paths cannot drift.
+
+    Without this, any dom0 process mapping the xenstore-advertised console
+    ring-ref after restore sees an empty page because the guest is still
+    writing to the old one.
+
+    Tested: isol8 PV domain save/restore with IDM over hvc0 console ring.
+
+diff --git a/drivers/tty/hvc/hvc_xen.c b/drivers/tty/hvc/hvc_xen.c
+index XXXXXXX..YYYYYYY 100644
+--- a/drivers/tty/hvc/hvc_xen.c
++++ b/drivers/tty/hvc/hvc_xen.c
+@@ -XXX,6 +XXX,18 @@ static struct xencons_info *vtermno_to_xencons(int vtermno)
+ 	return ret;
+ }
+
++/*
++ * Read PV console page and event channel from start_info.
++ * Called at boot (init) and after restore (resume) — xc_domain_restore
++ * rewrites start_info->console.domU.mfn with the new console page,
++ * so the guest must re-read it on resume.
++ */
++static void xen_console_update_pv(struct xencons_info *info)
++{
++	info->evtchn = xen_start_info->console.domU.evtchn;
++	/* GFN == MFN for PV guest */
++	info->intf = gfn_to_virt(xen_start_info->console.domU.mfn);
++}
++
+ static int xencons_info_pv_init(struct xencons_info *info, int vtermno)
+ {
+-	info->evtchn = xen_start_info->console.domU.evtchn;
+-	/* GFN == MFN for PV guest */
+-	info->intf = gfn_to_virt(xen_start_info->console.domU.mfn);
++	xen_console_update_pv(info);
+ 	info->vtermno = vtermno;
+
+ 	list_add_tail(&info->list, &xenconsoles);
+@@ -XXX,6 +XXX,10 @@ void xen_console_resume(void)
+ 	if (info != NULL && info->irq) {
+ 		if (!xen_initial_domain()) {
+ 			xen_console_update_evtchn(info);
++			/* Re-map PV console page — xc_domain_restore updates
++			 * start_info with the new MFN on restore. */
++			if (xen_pv_domain())
++				xen_console_update_pv(info);
+ 		}
+ 		rebind_evtchn_irq(info->evtchn, info->irq);
+ 	}

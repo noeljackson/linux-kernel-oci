@@ -84,6 +84,8 @@ patches:
   lower: '6.17'
 - patch: 0003-x86-amd_node-fix-null-pointer-dereference-if-amd_smn.patch
   lower: '6.17'
+- patch: hvc-xen-resume-remap-console.patch
+  lower: '6.1'
 images:
 - target: kernelsrc
   name: kernel-src

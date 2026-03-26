@@ -1,10 +1,10 @@
 --- a/kernel/stop_machine.c	2026-03-25 21:54:34.739888704 +0000
-+++ b/kernel/stop_machine.c	2026-03-26 19:50:06.203379275 +0000
++++ b/kernel/stop_machine.c	2026-03-26 20:04:04.134453095 +0000
 @@ -198,6 +198,11 @@
  }
  
  /* This is the cpu_stop function which stops the CPU. */
-+static void __attribute__((noinline)) pv_resume_fence(void)
++static noinline void pv_resume_fence(void)
 +{
 +	asm volatile("" : : : "memory");
 +}

@@ -1,0 +1,15 @@
+--- a/drivers/xen/manage.c	2026-03-26 12:12:06.684612382 +0000
++++ b/drivers/xen/manage.c	2026-03-26 12:19:33.595659972 +0000
+@@ -75,6 +75,12 @@
+                                            ? virt_to_gfn(xen_start_info)
+                                            : 0);
+ 
++	/* isol8: volatile store at first C-side landing */
++	{
++		extern u64 isol8_trace_page[];
++		WRITE_ONCE(isol8_trace_page[1], isol8_trace_page[1] | (1ULL << 8));
++	}
++
+ 	xen_arch_post_suspend(si->cancelled);
+ 	xen_manage_runstate_time(si->cancelled ? 1 : 0);
+ 	gnttab_resume();

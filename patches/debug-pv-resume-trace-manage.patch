@@ -1,14 +1,20 @@
 --- a/drivers/xen/manage.c	2026-03-26 12:12:06.684612382 +0000
-+++ b/drivers/xen/manage.c	2026-03-26 12:31:21.995011249 +0000
-@@ -75,6 +75,12 @@
++++ b/drivers/xen/manage.c	2026-03-26 12:38:25.467807946 +0000
+@@ -11,6 +11,8 @@
+ #include <linux/reboot.h>
+ #include <linux/sysrq.h>
+ #include <linux/stop_machine.h>
++
++static volatile unsigned long isol8_resume_marker;
+ #include <linux/suspend.h>
+ #include <linux/freezer.h>
+ #include <linux/syscore_ops.h>
+@@ -75,6 +77,9 @@
                                             ? virt_to_gfn(xen_start_info)
                                             : 0);
  
-+	/* isol8: volatile write to stack local */
-+	{
-+		volatile unsigned long dummy = 0xDEAD;
-+		(void)dummy;
-+	}
++	/* isol8: volatile write to same-file .data global */
++	isol8_resume_marker = 0xDEAD;
 +
  	xen_arch_post_suspend(si->cancelled);
  	xen_manage_runstate_time(si->cancelled ? 1 : 0);

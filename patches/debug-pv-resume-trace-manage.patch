@@ -1,14 +1,13 @@
 --- a/drivers/xen/manage.c	2026-03-26 12:12:06.684612382 +0000
-+++ b/drivers/xen/manage.c	2026-03-26 13:12:54.645372029 +0000
-@@ -75,6 +75,13 @@
++++ b/drivers/xen/manage.c	2026-03-26 13:23:04.852087248 +0000
+@@ -75,6 +75,12 @@
                                             ? virt_to_gfn(xen_start_info)
                                             : 0);
  
-+	/* isol8: READ from trace page (no write) */
++	/* isol8: inline asm store to trace page (post-RET) */
 +	{
 +		extern u64 isol8_trace_page[];
-+		volatile u64 tmp = READ_ONCE(isol8_trace_page[1]);
-+		(void)tmp;
++		asm volatile("movq $1, %0" : "=m" (isol8_trace_page[32]));
 +	}
 +
  	xen_arch_post_suspend(si->cancelled);

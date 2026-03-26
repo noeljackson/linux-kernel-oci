@@ -104,6 +104,9 @@ patches:
 - patch: debug-pv-resume-trace-manage4.patch
   lower: '6.1'
   order: 95
+- patch: debug-pv-resume-trace-narrow.patch
+  lower: '6.1'
+  order: 97
 - patch: fix-unmask-store-evtchn.patch
   lower: '6.1'
   order: 101

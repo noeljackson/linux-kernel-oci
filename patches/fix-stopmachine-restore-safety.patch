@@ -1,13 +1,22 @@
 --- a/kernel/stop_machine.c	2026-03-25 21:54:34.739888704 +0000
-+++ b/kernel/stop_machine.c	2026-03-26 19:34:15.537955933 +0000
-@@ -241,6 +241,10 @@
++++ b/kernel/stop_machine.c	2026-03-26 19:50:06.203379275 +0000
+@@ -198,6 +198,11 @@
+ }
+ 
+ /* This is the cpu_stop function which stops the CPU. */
++static void __attribute__((noinline)) pv_resume_fence(void)
++{
++	asm volatile("" : : : "memory");
++}
++
+ static int multi_cpu_stop(void *data)
+ {
+ 	struct multi_stop_data *msdata = data;
+@@ -241,6 +246,7 @@
  				break;
  			}
  			ack_state(msdata);
-+			{
-+				extern u64 isol8_trace_page[];
-+				WRITE_ONCE(isol8_trace_page[32], 1);
-+			}
++			pv_resume_fence();
  		} else if (curstate > MULTI_STOP_PREPARE) {
  			/*
  			 * At this stage all other CPUs we depend on must spin

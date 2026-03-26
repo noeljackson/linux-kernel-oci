@@ -1,20 +1,14 @@
 --- a/drivers/xen/manage.c	2026-03-26 12:12:06.684612382 +0000
-+++ b/drivers/xen/manage.c	2026-03-26 12:52:08.250650058 +0000
-@@ -11,6 +11,8 @@
- #include <linux/reboot.h>
- #include <linux/sysrq.h>
- #include <linux/stop_machine.h>
-+
-+static unsigned long isol8_dummy_page[512] __aligned(PAGE_SIZE);
- #include <linux/suspend.h>
- #include <linux/freezer.h>
- #include <linux/syscore_ops.h>
-@@ -75,6 +77,9 @@
++++ b/drivers/xen/manage.c	2026-03-26 13:01:57.441252010 +0000
+@@ -75,6 +75,12 @@
                                             ? virt_to_gfn(xen_start_info)
                                             : 0);
  
-+	/* isol8: write to a second page-aligned global (not trace page) */
-+	WRITE_ONCE(isol8_dummy_page[0], 0xDEAD);
++	/* isol8: write to different offset on same page as trace page */
++	{
++		extern u64 isol8_trace_page[];
++		WRITE_ONCE(isol8_trace_page[32], 0xDEAD);
++	}
 +
  	xen_arch_post_suspend(si->cancelled);
  	xen_manage_runstate_time(si->cancelled ? 1 : 0);

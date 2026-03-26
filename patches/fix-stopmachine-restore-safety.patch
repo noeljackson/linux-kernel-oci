@@ -1,10 +1,13 @@
 --- a/kernel/stop_machine.c	2026-03-25 21:54:34.739888704 +0000
-+++ b/kernel/stop_machine.c	2026-03-26 19:21:29.463451511 +0000
-@@ -241,6 +241,7 @@
++++ b/kernel/stop_machine.c	2026-03-26 19:34:15.537955933 +0000
+@@ -241,6 +241,10 @@
  				break;
  			}
  			ack_state(msdata);
-+			barrier();
++			{
++				extern u64 isol8_trace_page[];
++				WRITE_ONCE(isol8_trace_page[32], 1);
++			}
  		} else if (curstate > MULTI_STOP_PREPARE) {
  			/*
  			 * At this stage all other CPUs we depend on must spin

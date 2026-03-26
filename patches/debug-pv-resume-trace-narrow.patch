@@ -1,0 +1,32 @@
+--- a/drivers/xen/manage.c
++++ b/drivers/xen/manage.c
+@@ -137,11 +137,29 @@
+ 	err = stop_machine(xen_suspend, &si, cpumask_of(0));
+ 
++	/* isol8 trace: bit 20 = stop_machine returned */
++	{
++		extern void isol8_trace(u64 bit);
++		isol8_trace(1ULL << 20);
++	}
++
+ 	/* Resume console as early as possible. */
+ 	if (!si.cancelled)
+ 		xen_console_resume();
+ 
++	/* isol8 trace: bit 21 = xen_console_resume done */
++	{
++		extern void isol8_trace(u64 bit);
++		isol8_trace(1ULL << 21);
++	}
++
+ 	raw_notifier_call_chain(&xen_resume_notifier, 0, NULL);
+ 
+ 	xen_arch_resume();
++
++	/* isol8 trace: bit 22 = xen_arch_resume done */
++	{
++		extern void isol8_trace(u64 bit);
++		isol8_trace(1ULL << 22);
++	}
+ 
+ 	dpm_resume_start(si.cancelled ? PMSG_THAW : PMSG_RESTORE);

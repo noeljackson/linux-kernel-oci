@@ -86,6 +86,8 @@ patches:
   lower: '6.17'
 - patch: hvc-xen-resume-remap-console.patch
   lower: '6.1'
+- patch: fix-unmask-store-evtchn.patch
+  lower: '6.1'
 images:
 - target: kernelsrc
   name: kernel-src

@@ -1,0 +1,19 @@
+--- a/arch/x86/xen/xen-asm.S	2026-03-24 20:20:47.572002378 +0100
++++ b/arch/x86/xen/xen-asm.S	2026-03-24 20:20:47.575002336 +0100
+@@ -6,6 +6,16 @@
+ 	syscall
+ 	UNWIND_HINT_RESTORE
+ 	pop %r11
++	/* isol8 trace: bit 6 = first instruction after resume */
++	push %rdi
++	leaq isol8_trace_page+8(%rip), %rdi
++	orq $0x40, (%rdi)
++	pop %rdi
+ 	pop %rcx
++	/* isol8 trace: bit 7 = epilogue complete, about to return */
++	push %rdi
++	leaq isol8_trace_page+8(%rip), %rdi
++	orq $0x80, (%rdi)
++	pop %rdi
+ 	RET
+ SYM_FUNC_END(xen_hypercall_pv)

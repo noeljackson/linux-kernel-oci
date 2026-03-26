@@ -1,0 +1,15 @@
+--- a/drivers/xen/manage.c	2026-03-25 11:05:10.107587644 +0100
++++ b/drivers/xen/manage.c	2026-03-25 11:05:10.110587672 +0100
+@@ -1,4 +1,12 @@
+ out_resume:
++	/* Unmask xenstore evtchn after restore. xc_domain_restore masks
++	 * all event channels in shared_info. Without unmasking, xs_resume
++	 * blocks forever waiting for a response notification. */
++	{
++		extern int xen_store_evtchn;
++		struct shared_info *s = HYPERVISOR_shared_info;
++		clear_bit(xen_store_evtchn, &s->evtchn_mask[0]);
++	}
+ 	if (!si.cancelled)
+ 		xs_resume();
+ 	else

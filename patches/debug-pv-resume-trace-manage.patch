@@ -1,0 +1,18 @@
+--- a/drivers/xen/manage.c	2026-03-25 09:50:22.021445687 +0100
++++ b/drivers/xen/manage.c	2026-03-25 09:50:22.023445693 +0100
+@@ -1,4 +1,15 @@
+                                            ? virt_to_gfn(xen_start_info)
+                                            : 0);
+ 
++	/* isol8: clear all bits >= 12 (stale from boot-time stop_machine calls) */
++	{
++		extern struct { unsigned long long magic, flags, ts; } isol8_trace_page;
++		isol8_trace_page.flags &= 0xFFF;
++	}
++	/* isol8 trace: bit 8 = ret from HYPERVISOR_suspend landed in C */
++	{
++		extern void isol8_trace(u64 bit);
++		isol8_trace(1ULL << 8);
++	}
++
+ 	xen_arch_post_suspend(si->cancelled);

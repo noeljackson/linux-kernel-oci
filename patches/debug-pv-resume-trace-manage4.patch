@@ -1,0 +1,14 @@
+--- a/drivers/xen/manage.c	2026-03-24 21:32:50.778291113 +0100
++++ b/drivers/xen/manage.c	2026-03-24 21:32:50.781291111 +0100
+@@ -3,9 +3,11 @@
+ 		xs_resume();
+ 	else
+ 		xs_suspend_cancel();
++	{ extern void isol8_trace(u64 bit); isol8_trace(1ULL << 15); }
+ 
+ out_resume_end:
+ 	dpm_resume_end(si.cancelled ? PMSG_THAW : PMSG_RESTORE);
++	{ extern void isol8_trace(u64 bit); isol8_trace(1ULL << 16); }
+ 
+ out_thaw:
+ 	thaw_processes();

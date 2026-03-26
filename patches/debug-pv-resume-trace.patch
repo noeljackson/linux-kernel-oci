@@ -1,0 +1,49 @@
+--- a/arch/x86/xen/suspend.c	2026-03-25 09:58:28.933832493 +0100
++++ b/arch/x86/xen/suspend.c	2026-03-25 09:58:28.936035123 +0100
+@@ -17,10 +17,33 @@
+ 
+ #include "xen-ops.h"
+ 
++/* ---- isol8 restore trace page ---- */
++#define ISOL8_TRACE_MAGIC 0x49534F4C38545243ULL
++#define TRACE_PRE_SUSPEND     (1ULL << 0)
++#define TRACE_POST_SUSPEND    (1ULL << 1)
++#define TRACE_POST_EXIT       (1ULL << 2)
++struct isol8_trace {
++	u64 magic;
++	u64 flags;
++	u64 timestamp;
++	u64 ack_addr;    /* address of msdata->thread_ack at bit 17 */
++	u64 ack_value;   /* value of *thread_ack at bit 17 */
++};
++struct isol8_trace __aligned(PAGE_SIZE)
++	isol8_trace_page = { .magic = ISOL8_TRACE_MAGIC };
++void isol8_trace(u64 bit);
++void isol8_trace(u64 bit)
++{
++	isol8_trace_page.flags |= bit;
++	isol8_trace_page.timestamp = rdtsc();
++}
++/* ---- end trace page ---- */
++
+ static DEFINE_PER_CPU(u64, spec_ctrl);
+ 
+ void xen_arch_pre_suspend(void)
+ {
++	isol8_trace(TRACE_PRE_SUSPEND);
+ 	xen_save_time_memory_area();
+ 
+ 	if (xen_pv_domain())
+@@ -29,10 +52,12 @@
+ 
+ void xen_arch_post_suspend(int cancelled)
+ {
++	isol8_trace(TRACE_POST_SUSPEND);
+ 	if (xen_pv_domain())
+ 		xen_pv_post_suspend(cancelled);
+ 	else
+ 		xen_hvm_post_suspend(cancelled);
+ 
+ 	xen_restore_time_memory_area();
++	isol8_trace(TRACE_POST_EXIT);
+ }

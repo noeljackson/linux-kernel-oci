@@ -1,0 +1,15 @@
+--- a/drivers/xen/xenbus/xenbus_xs.c
++++ b/drivers/xen/xenbus/xenbus_xs.c
+@@ -815,6 +815,12 @@
+ void xs_resume(void)
+ {
+ 	struct xenbus_watch *watch;
+ 	char token[sizeof(watch) * 2 + 1];
+ 
++	/* isol8 trace: bit 23 = xs_resume entry */
++	{
++		extern void isol8_trace(u64 bit);
++		isol8_trace(1ULL << 23);
++	}
++
+ 	xb_init_comms();

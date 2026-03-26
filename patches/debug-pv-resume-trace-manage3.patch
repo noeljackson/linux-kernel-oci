@@ -1,0 +1,9 @@
+--- a/drivers/xen/manage.c	2026-03-25 10:45:57.851016070 +0100
++++ b/drivers/xen/manage.c	2026-03-25 10:45:57.853016075 +0100
+@@ -2,5 +2,6 @@
+ 	{ extern void isol8_trace(u64 bit); isol8_trace(1ULL << 14); }
+ 
+ 	dpm_resume_start(si.cancelled ? PMSG_THAW : PMSG_RESTORE);
++	{ extern void isol8_trace(u64 bit); isol8_trace(1ULL << 26); }
+ 
+ 	if (err) {

@@ -89,6 +89,30 @@ patches:
 - patch: debug-pv-resume-trace.patch
   lower: '6.1'
   order: 90
+- patch: debug-pv-resume-trace-asm.patch
+  lower: '6.1'
+  order: 91
+- patch: debug-pv-resume-trace-manage.patch
+  lower: '6.1'
+  order: 92
+- patch: debug-pv-resume-trace-manage2.patch
+  lower: '6.1'
+  order: 93
+- patch: debug-pv-resume-trace-manage3.patch
+  lower: '6.1'
+  order: 94
+- patch: debug-pv-resume-trace-manage4.patch
+  lower: '6.1'
+  order: 95
+- patch: fix-stopmachine-restore-safety.patch
+  lower: '6.1'
+  order: 96
+- patch: debug-pv-resume-trace-narrow.patch
+  lower: '6.1'
+  order: 97
+- patch: debug-pv-resume-trace-xsnarrow.patch
+  lower: '6.1'
+  order: 98
 - patch: fix-unmask-store-evtchn.patch
   lower: '6.1'
   order: 101

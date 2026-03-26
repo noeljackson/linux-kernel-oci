@@ -1,8 +1,6 @@
---- a/drivers/xen/xenbus/xenbus_xs.c
-+++ b/drivers/xen/xenbus/xenbus_xs.c
-@@ -815,6 +815,12 @@
- void xs_resume(void)
- {
+--- a/drivers/xen/xenbus/xenbus_xs.c	2026-03-26 11:24:57.759035073 +0000
++++ b/drivers/xen/xenbus/xenbus_xs.c	2026-03-26 11:25:11.533936056 +0000
+@@ -817,6 +817,12 @@
  	struct xenbus_watch *watch;
  	char token[sizeof(watch) * 2 + 1];
  
@@ -13,3 +11,5 @@
 +	}
 +
  	xb_init_comms();
+ 
+ 	mutex_unlock(&xs_response_mutex);

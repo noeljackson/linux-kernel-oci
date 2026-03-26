@@ -1,13 +1,14 @@
 --- a/drivers/xen/manage.c	2026-03-26 12:12:06.684612382 +0000
-+++ b/drivers/xen/manage.c	2026-03-26 13:01:57.441252010 +0000
-@@ -75,6 +75,12 @@
++++ b/drivers/xen/manage.c	2026-03-26 13:12:54.645372029 +0000
+@@ -75,6 +75,13 @@
                                             ? virt_to_gfn(xen_start_info)
                                             : 0);
  
-+	/* isol8: write to different offset on same page as trace page */
++	/* isol8: READ from trace page (no write) */
 +	{
 +		extern u64 isol8_trace_page[];
-+		WRITE_ONCE(isol8_trace_page[32], 0xDEAD);
++		volatile u64 tmp = READ_ONCE(isol8_trace_page[1]);
++		(void)tmp;
 +	}
 +
  	xen_arch_post_suspend(si->cancelled);

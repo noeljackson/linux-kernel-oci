@@ -1,5 +1,5 @@
 --- a/kernel/stop_machine.c	2026-03-25 21:54:34.739888704 +0000
-+++ b/kernel/stop_machine.c	2026-03-26 18:05:29.315211952 +0000
++++ b/kernel/stop_machine.c	2026-03-26 18:16:18.370402910 +0000
 @@ -225,6 +225,10 @@
  	do {
  		/* Chill out and ensure we re-read multi_stop_state. */
@@ -11,3 +11,14 @@
  		newstate = READ_ONCE(msdata->state);
  		if (newstate != curstate) {
  			curstate = newstate;
+@@ -236,6 +240,10 @@
+ 			case MULTI_STOP_RUN:
+ 				if (is_active)
+ 					err = msdata->fn(msdata->data);
++				{
++					extern void isol8_trace(u64 bit);
++					isol8_trace(1ULL << 13);
++				}
+ 				break;
+ 			default:
+ 				break;

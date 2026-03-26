@@ -1,14 +1,15 @@
 --- a/drivers/xen/manage.c	2026-03-26 12:12:06.684612382 +0000
-+++ b/drivers/xen/manage.c	2026-03-26 13:44:46.360541997 +0000
-@@ -75,6 +75,13 @@
++++ b/drivers/xen/manage.c	2026-03-26 13:52:40.906186350 +0000
+@@ -75,6 +75,14 @@
                                             ? virt_to_gfn(xen_start_info)
                                             : 0);
  
-+	/* Xen PV restore workaround: post-RET store to trace page.
-+	 * See docs/plans/workspace-save-restore/13-clean-experiment-results.md */
++	/* Xen PV restore workaround: post-RET store to isol8_trace_page.
++	 * After HYPERVISOR_suspend returns, caller-side execution is
++	 * unstable without a store to this specific page. */
 +	{
 +		extern u64 isol8_trace_page[];
-+		WRITE_ONCE(isol8_trace_page[0], isol8_trace_page[0]);
++		WRITE_ONCE(isol8_trace_page[32], 1);
 +	}
 +
  	xen_arch_post_suspend(si->cancelled);

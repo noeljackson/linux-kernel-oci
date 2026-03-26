@@ -31,6 +31,15 @@ ARG KERNEL_VERSION=
 ARG KERNEL_FLAVOR=zone
 ARG BUILDPLATFORM
 ARG TARGETPLATFORM
+# Deterministic build: same source = same binary
+ARG SOURCE_DATE_EPOCH=0
+ARG KBUILD_BUILD_TIMESTAMP="1970-01-01"
+ARG KBUILD_BUILD_USER=isol8
+ARG KBUILD_BUILD_HOST=build
+ENV SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH}
+ENV KBUILD_BUILD_TIMESTAMP=${KBUILD_BUILD_TIMESTAMP}
+ENV KBUILD_BUILD_USER=${KBUILD_BUILD_USER}
+ENV KBUILD_BUILD_HOST=${KBUILD_BUILD_HOST}
 COPY --from=kernelsrc --chown=build:build /src.tar.xz /build/override-kernel-src.tar.xz
 COPY --from=firmware --chown=build:build /firmware.tar.xz /build/override-firmware.tar.xz
 COPY --from=firmware --chown=build:build /firmware.tar.sign /build/override-firmware.tar.sign

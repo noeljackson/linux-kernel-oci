@@ -1,27 +1,27 @@
-ARG BUILDPLATFORM=linux/amd64
-ARG TARGETPLATFORM=linux/amd64
+ARG OCI_BUILDPLATFORM=linux/amd64
+ARG OCI_TARGETPLATFORM=linux/amd64
 
-FROM --platform=${BUILDPLATFORM} scratch AS kernelsrc
+FROM --platform=${OCI_BUILDPLATFORM} scratch AS kernelsrc
 ARG KERNEL_SRC_URL=
 ADD ${KERNEL_SRC_URL} /src.tar.xz
 
-FROM --platform=${BUILDPLATFORM} scratch AS firmware
+FROM --platform=${OCI_BUILDPLATFORM} scratch AS firmware
 ARG FIRMWARE_URL=
 ARG FIRMWARE_SIG_URL=
 ADD ${FIRMWARE_URL} /firmware.tar.xz
 ADD ${FIRMWARE_SIG_URL} /firmware.tar.sign
 
-FROM --platform=${BUILDPLATFORM} debian:bookworm@sha256:bd73076dc2cd9c88f48b5b358328f24f2a4289811bd73787c031e20db9f97123 AS buildenv
+FROM --platform=${OCI_BUILDPLATFORM} debian:bookworm@sha256:bd73076dc2cd9c88f48b5b358328f24f2a4289811bd73787c031e20db9f97123 AS buildenv
 RUN export DEBIAN_FRONTEND=noninteractive && apt-get update && apt-get install -y \
       build-essential squashfs-tools python3-yaml \
       patch diffutils sed mawk findutils zstd \
       python3 python3-packaging curl rsync cpio gpg grep \
       flex bison pahole libssl-dev libelf-dev bc kmod && \
       rm -rf /var/lib/apt/lists/*
-ARG BUILDPLATFORM
-RUN if [ "${BUILDPLATFORM}" = "linux/amd64" ]; then \
+ARG OCI_BUILDPLATFORM
+RUN if [ "${OCI_BUILDPLATFORM}" = "linux/amd64" ]; then \
       apt-get update && apt-get install -y linux-headers-amd64 g++-aarch64-linux-gnu gcc-aarch64-linux-gnu && rm -rf /var/lib/apt/lists/*; fi
-RUN if [ "${BUILDPLATFORM}" = "linux/arm64" ] || [ "${BUILDPLATFORM}" = "linux/aarch64" ]; then \
+RUN if [ "${OCI_BUILDPLATFORM}" = "linux/arm64" ] || [ "${OCI_BUILDPLATFORM}" = "linux/aarch64" ]; then \
       apt-get update && apt-get install -y linux-headers-arm64 g++-x86-64-linux-gnu gcc-x86-64-linux-gnu && rm -rf /var/lib/apt/lists/*; fi
 RUN useradd -ms /bin/sh build
 COPY --chown=build:build . /build
@@ -32,8 +32,8 @@ RUN chmod +x hack/build/docker-build-internal.sh
 FROM buildenv AS build
 ARG KERNEL_VERSION=
 ARG KERNEL_FLAVOR=zone
-ARG BUILDPLATFORM
-ARG TARGETPLATFORM
+ARG OCI_BUILDPLATFORM
+ARG OCI_TARGETPLATFORM
 # Deterministic build: same source = same binary
 ARG SOURCE_DATE_EPOCH=0
 ARG KBUILD_BUILD_TIMESTAMP="1970-01-01"

@@ -1,14 +1,17 @@
-FROM --platform=$BUILDPLATFORM scratch AS kernelsrc
+ARG BUILDPLATFORM=linux/amd64
+ARG TARGETPLATFORM=linux/amd64
+
+FROM --platform=${BUILDPLATFORM} scratch AS kernelsrc
 ARG KERNEL_SRC_URL=
 ADD ${KERNEL_SRC_URL} /src.tar.xz
 
-FROM --platform=$BUILDPLATFORM scratch AS firmware
+FROM --platform=${BUILDPLATFORM} scratch AS firmware
 ARG FIRMWARE_URL=
 ARG FIRMWARE_SIG_URL=
 ADD ${FIRMWARE_URL} /firmware.tar.xz
 ADD ${FIRMWARE_SIG_URL} /firmware.tar.sign
 
-FROM --platform=$BUILDPLATFORM debian:bookworm@sha256:bd73076dc2cd9c88f48b5b358328f24f2a4289811bd73787c031e20db9f97123 AS buildenv
+FROM --platform=${BUILDPLATFORM} debian:bookworm@sha256:bd73076dc2cd9c88f48b5b358328f24f2a4289811bd73787c031e20db9f97123 AS buildenv
 RUN export DEBIAN_FRONTEND=noninteractive && apt-get update && apt-get install -y \
       build-essential squashfs-tools python3-yaml \
       patch diffutils sed mawk findutils zstd \

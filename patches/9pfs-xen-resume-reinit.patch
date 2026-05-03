@@ -1,0 +1,244 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Noel Jackson <noel@codewire.sh>
+Date: Sun, 3 May 2026 18:08:00 +0200
+Subject: [PATCH] 9p/xen: rebuild transport rings on PV restore
+
+The Xen 9p frontend currently advertises suspend/resume as unsupported.
+After xl save/restore, dom0 recreates the backend with fresh grant refs
+and event channels, but the guest transport keeps its pre-save rings.
+Rebuild the Xen transport in place during resume so the mounted 9p
+client can reconnect to the restored backend.
+
+Signed-off-by: Noel Jackson <noel@codewire.sh>
+---
+--- a/net/9p/trans_xen.c
++++ b/net/9p/trans_xen.c
+@@ -273,38 +273,71 @@
+ 	{ "" }
+ };
+ 
+-static void xen_9pfs_front_free(struct xen_9pfs_front_priv *priv)
++static int xen_9pfs_front_alloc_dataring(struct xenbus_device *dev,
++					 struct xen_9pfs_dataring *ring,
++					 unsigned int order);
++
++static void xen_9pfs_front_free_rings(struct xen_9pfs_front_priv *priv)
+ {
+ 	int i, j;
+ 
+-	if (priv->rings) {
+-		for (i = 0; i < XEN_9PFS_NUM_RINGS; i++) {
+-			struct xen_9pfs_dataring *ring = &priv->rings[i];
+-
+-			cancel_work_sync(&ring->work);
+-
+-			if (!priv->rings[i].intf)
+-				break;
+-			if (priv->rings[i].irq > 0)
+-				unbind_from_irqhandler(priv->rings[i].irq, ring);
+-			if (priv->rings[i].data.in) {
+-				for (j = 0;
+-				     j < (1 << priv->rings[i].intf->ring_order);
+-				     j++) {
+-					grant_ref_t ref;
+-
+-					ref = priv->rings[i].intf->ref[j];
+-					gnttab_end_foreign_access(ref, NULL);
+-				}
+-				free_pages_exact(priv->rings[i].data.in,
+-				   1UL << (priv->rings[i].intf->ring_order +
+-					   XEN_PAGE_SHIFT));
++	if (!priv->rings)
++		return;
++
++	for (i = 0; i < XEN_9PFS_NUM_RINGS; i++) {
++		struct xen_9pfs_dataring *ring = &priv->rings[i];
++
++		cancel_work_sync(&ring->work);
++
++		if (!ring->intf)
++			break;
++		if (ring->irq > 0)
++			unbind_from_irqhandler(ring->irq, ring);
++		if (ring->data.in) {
++			for (j = 0; j < (1 << ring->intf->ring_order); j++) {
++				grant_ref_t ref;
++
++				ref = ring->intf->ref[j];
++				gnttab_end_foreign_access(ref, NULL);
+ 			}
+-			gnttab_end_foreign_access(priv->rings[i].ref, NULL);
+-			free_page((unsigned long)priv->rings[i].intf);
++			free_pages_exact(ring->data.in,
++				   1UL << (ring->intf->ring_order +
++					   XEN_PAGE_SHIFT));
+ 		}
+-		kfree(priv->rings);
++		gnttab_end_foreign_access(ring->ref, NULL);
++		free_page((unsigned long)ring->intf);
++	}
++
++	kfree(priv->rings);
++	priv->rings = NULL;
++}
++
++static int xen_9pfs_front_alloc_rings(struct xenbus_device *dev,
++				      struct xen_9pfs_front_priv *priv,
++				      unsigned int ring_order)
++{
++	int i, ret;
++
++	priv->dev = dev;
++	priv->rings = kcalloc(XEN_9PFS_NUM_RINGS, sizeof(*priv->rings),
++			      GFP_KERNEL);
++	if (!priv->rings)
++		return -ENOMEM;
++
++	for (i = 0; i < XEN_9PFS_NUM_RINGS; i++) {
++		priv->rings[i].priv = priv;
++		ret = xen_9pfs_front_alloc_dataring(dev, &priv->rings[i],
++						    ring_order);
++		if (ret < 0)
++			return ret;
+ 	}
++
++	return 0;
++}
++
++static void xen_9pfs_front_free(struct xen_9pfs_front_priv *priv)
++{
++	xen_9pfs_front_free_rings(priv);
+ 	kfree(priv->tag);
+ 	kfree(priv);
+ }
+@@ -389,9 +422,10 @@
+ {
+ 	int ret, i;
+ 	struct xenbus_transaction xbt;
+-	struct xen_9pfs_front_priv *priv;
++	struct xen_9pfs_front_priv *priv = dev_get_drvdata(&dev->dev);
+ 	char *versions, *v;
+ 	unsigned int max_rings, max_ring_order, len = 0;
++	bool new_priv = false;
+ 
+ 	versions = xenbus_read(XBT_NIL, dev->otherend, "versions", &len);
+ 	if (IS_ERR(versions))
+@@ -417,23 +451,19 @@
+ 	if (p9_xen_trans.maxsize > XEN_FLEX_RING_SIZE(max_ring_order))
+ 		p9_xen_trans.maxsize = XEN_FLEX_RING_SIZE(max_ring_order) / 2;
+ 
+-	priv = kzalloc(sizeof(*priv), GFP_KERNEL);
+-	if (!priv)
+-		return -ENOMEM;
+-	priv->dev = dev;
+-	priv->rings = kcalloc(XEN_9PFS_NUM_RINGS, sizeof(*priv->rings),
+-			      GFP_KERNEL);
+-	if (!priv->rings) {
+-		kfree(priv);
+-		return -ENOMEM;
++	if (!priv) {
++		priv = kzalloc(sizeof(*priv), GFP_KERNEL);
++		if (!priv)
++			return -ENOMEM;
++		new_priv = true;
+ 	}
+ 
+-	for (i = 0; i < XEN_9PFS_NUM_RINGS; i++) {
+-		priv->rings[i].priv = priv;
+-		ret = xen_9pfs_front_alloc_dataring(dev, &priv->rings[i],
+-						    max_ring_order);
+-		if (ret < 0)
+-			goto error;
++	xen_9pfs_front_free_rings(priv);
++	ret = xen_9pfs_front_alloc_rings(dev, priv, max_ring_order);
++	if (ret < 0) {
++		if (new_priv)
++			goto error_free_priv;
++		goto error;
+ 	}
+ 
+  again:
+@@ -466,10 +496,13 @@
+ 		if (ret)
+ 			goto error_xenbus;
+ 	}
+-	priv->tag = xenbus_read(xbt, dev->nodename, "tag", NULL);
+-	if (IS_ERR(priv->tag)) {
+-		ret = PTR_ERR(priv->tag);
+-		goto error_xenbus;
++	if (!priv->tag) {
++		priv->tag = xenbus_read(xbt, dev->nodename, "tag", NULL);
++		if (IS_ERR(priv->tag)) {
++			ret = PTR_ERR(priv->tag);
++			priv->tag = NULL;
++			goto error_xenbus;
++		}
+ 	}
+ 	ret = xenbus_transaction_end(xbt, 0);
+ 	if (ret) {
+@@ -479,10 +512,12 @@
+ 		goto error;
+ 	}
+ 
+-	write_lock(&xen_9pfs_lock);
+-	dev_set_drvdata(&dev->dev, priv);
+-	list_add_tail(&priv->list, &xen_9pfs_devs);
+-	write_unlock(&xen_9pfs_lock);
++	if (new_priv) {
++		write_lock(&xen_9pfs_lock);
++		dev_set_drvdata(&dev->dev, priv);
++		list_add_tail(&priv->list, &xen_9pfs_devs);
++		write_unlock(&xen_9pfs_lock);
++	}
+ 
+ 	xenbus_switch_state(dev, XenbusStateInitialised);
+ 	return 0;
+@@ -491,7 +526,11 @@
+ 	xenbus_transaction_end(xbt, 1);
+ 	xenbus_dev_fatal(dev, ret, "writing xenstore");
+  error:
+-	xen_9pfs_front_free(priv);
++	xen_9pfs_front_free_rings(priv);
++	return ret;
++ error_free_priv:
++	if (new_priv)
++		xen_9pfs_front_free(priv);
+ 	return ret;
+ }
+ 
+@@ -503,8 +542,23 @@
+ 
+ static int xen_9pfs_front_resume(struct xenbus_device *dev)
+ {
+-	dev_warn(&dev->dev, "suspend/resume unsupported\n");
+-	return 0;
++	struct xen_9pfs_front_priv *priv = dev_get_drvdata(&dev->dev);
++	int ret;
++
++	if (!priv)
++		return 0;
++
++	/*
++	 * xl restore recreates the dom0 backend with new grant refs and
++	 * event channels. Rebuild the frontend transport in place so the
++	 * mounted 9p client keeps its existing tag/client association.
++	 */
++	ret = xen_9pfs_front_init(dev);
++	if (ret)
++		xenbus_dev_fatal(dev, ret,
++				 "rebuilding frontend transport after restore");
++
++	return ret;
+ }
+ 
+ static void xen_9pfs_front_changed(struct xenbus_device *dev,
+@@ -519,7 +573,8 @@
+ 		break;
+ 
+ 	case XenbusStateInitWait:
+-		if (dev->state != XenbusStateInitialising)
++		if (dev->state != XenbusStateInitialising &&
++		    dev->state != XenbusStateClosed)
+ 			break;
+ 
+ 		xen_9pfs_front_init(dev);

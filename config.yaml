@@ -89,12 +89,6 @@ patches:
   lower: '6.17'
 - patch: hvc-xen-resume-remap-console.patch
   lower: '6.1'
-- patch: debug-pv-resume-trace.patch
-  lower: '6.1'
-  order: 90
-- patch: debug-pv-resume-trace-manage.patch
-  lower: '6.1'
-  order: 92
 - patch: fix-stopmachine-restore-safety.patch
   lower: '6.1'
   order: 96

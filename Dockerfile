@@ -32,6 +32,7 @@ RUN chmod +x hack/build/docker-build-internal.sh
 FROM buildenv AS build
 ARG KERNEL_VERSION=
 ARG KERNEL_FLAVOR=zone
+ARG KERNEL_EXPORT_VMLINUX=0
 ARG OCI_BUILDPLATFORM
 ARG OCI_TARGETPLATFORM
 # Deterministic build: same source = same binary
@@ -43,6 +44,7 @@ ENV SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH}
 ENV KBUILD_BUILD_TIMESTAMP=${KBUILD_BUILD_TIMESTAMP}
 ENV KBUILD_BUILD_USER=${KBUILD_BUILD_USER}
 ENV KBUILD_BUILD_HOST=${KBUILD_BUILD_HOST}
+ENV KERNEL_EXPORT_VMLINUX=${KERNEL_EXPORT_VMLINUX}
 COPY --from=kernelsrc --chown=build:build /src.tar.xz /build/override-kernel-src.tar.xz
 COPY --from=firmware --chown=build:build /firmware.tar.xz /build/override-firmware.tar.xz
 COPY --from=firmware --chown=build:build /firmware.tar.sign /build/override-firmware.tar.sign

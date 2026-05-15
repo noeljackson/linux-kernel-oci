@@ -1,0 +1,50 @@
+--- a/drivers/xen/manage.c	2026-05-15 19:43:00.000000000 +0200
++++ b/drivers/xen/manage.c	2026-05-15 19:43:00.000000000 +0200
+@@ -11,6 +11,7 @@
+ #include <linux/stop_machine.h>
+ #include <linux/suspend.h>
+ #include <linux/freezer.h>
++#include <linux/cpu.h>
+ #include <linux/syscore_ops.h>
+ #include <linux/export.h>
+ 
+@@ -93,6 +94,7 @@
+ static void do_suspend(void)
+ {
+ 	int err;
++	bool secondary_cpus_disabled = false;
+ 	struct suspend_info si;
+ 
+ 	shutting_down = SHUTDOWN_SUSPEND;
+@@ -135,6 +137,20 @@
+ 		goto out_resume;
+ 	}
+ 
++	/*
++	 * Xen PV restore resumes all restored vCPUs when the domain is
++	 * unpaused. Keep the saved image CPU0-only so secondary vCPUs cannot
++	 * run idle/timekeeping paths before CPU0 has completed the Xen and
++	 * syscore resume sequence.
++	 */
++	err = suspend_disable_secondary_cpus();
++	secondary_cpus_disabled = true;
++	if (err) {
++		pr_err("suspend_disable_secondary_cpus failed: %d\n", err);
++		si.cancelled = 1;
++		goto out_enable_cpus;
++	}
++
+ 	xen_arch_suspend();
+ 
+ 	si.cancelled = 1;
+@@ -150,5 +166,9 @@
+ 
+ 	xen_arch_resume();
+ 
++out_enable_cpus:
++	if (secondary_cpus_disabled)
++		suspend_enable_secondary_cpus();
++
+ 	dpm_resume_start(si.cancelled ? PMSG_THAW : PMSG_RESTORE);
+ 
+ 	if (err) {

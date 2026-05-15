@@ -98,6 +98,12 @@ patches:
 - patch: fix-stopmachine-restore-safety.patch
   lower: '6.1'
   order: 96
+- patch: fix-xen-pv-restore-freeze-secondary-cpus.patch
+  lower: '6.19'
+  flavors:
+  - isol8
+  - zone
+  order: 97
 - patch: fix-unmask-store-evtchn.patch
   lower: '6.1'
   order: 101

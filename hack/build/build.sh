@@ -87,8 +87,9 @@ else
 fi
 
 # For PV-only flavors, copy vmlinux (ELF) for Xen PV domain boot.
-# Other flavors get an empty placeholder so Dockerfile COPY doesn't fail.
-if [ "${KERNEL_FLAVOR}" = "isol8" ]; then
+# Other flavors get an empty placeholder so Dockerfile COPY doesn't fail,
+# unless a local proof build explicitly requests the ELF artifact.
+if [ "${KERNEL_FLAVOR}" = "isol8" ] || [ "${KERNEL_EXPORT_VMLINUX:-0}" = "1" ]; then
 	cp "${KERNEL_OBJ}/vmlinux" "${OUTPUT_DIR}/vmlinux"
 else
 	touch "${OUTPUT_DIR}/vmlinux"

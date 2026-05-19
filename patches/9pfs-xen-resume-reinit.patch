@@ -1,13 +1,16 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Noel Jackson <noel@codewire.sh>
 Date: Sun, 3 May 2026 18:08:00 +0200
-Subject: [PATCH] 9p/xen: rebuild transport rings on PV restore
+Subject: [PATCH] 9p/xen: rebuild transport rings after PV restore InitWait
 
 The Xen 9p frontend currently advertises suspend/resume as unsupported.
 After xl save/restore, dom0 recreates the backend with fresh grant refs
 and event channels, but the guest transport keeps its pre-save rings.
-Rebuild the Xen transport in place during resume so the mounted 9p
-client can reconnect to the restored backend.
+Allow the frontend to rebuild the Xen transport in place when the
+restored backend publishes InitWait from a Closed frontend state. The
+resume callback must not initialize directly because the backend state
+change is the normal xenbus synchronization edge; doing both can race two
+frontend initializations and produce partially stale rings.
 
 Signed-off-by: Noel Jackson <noel@codewire.sh>
 ---
@@ -206,29 +209,13 @@ Signed-off-by: Noel Jackson <noel@codewire.sh>
  	return ret;
  }
  
-@@ -503,8 +542,23 @@
+@@ -503,8 +542,8 @@
  
  static int xen_9pfs_front_resume(struct xenbus_device *dev)
  {
 -	dev_warn(&dev->dev, "suspend/resume unsupported\n");
--	return 0;
-+	struct xen_9pfs_front_priv *priv = dev_get_drvdata(&dev->dev);
-+	int ret;
-+
-+	if (!priv)
-+		return 0;
-+
-+	/*
-+	 * xl restore recreates the dom0 backend with new grant refs and
-+	 * event channels. Rebuild the frontend transport in place so the
-+	 * mounted 9p client keeps its existing tag/client association.
-+	 */
-+	ret = xen_9pfs_front_init(dev);
-+	if (ret)
-+		xenbus_dev_fatal(dev, ret,
-+				 "rebuilding frontend transport after restore");
-+
-+	return ret;
++	dev_info(&dev->dev, "waiting for backend InitWait to rebuild transport after restore\n");
+ 	return 0;
  }
  
  static void xen_9pfs_front_changed(struct xenbus_device *dev,

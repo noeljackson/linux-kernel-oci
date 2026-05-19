@@ -126,7 +126,7 @@ Signed-off-by: Noel Jackson <noel@codewire.sh>
  
  	versions = xenbus_read(XBT_NIL, dev->otherend, "versions", &len);
  	if (IS_ERR(versions))
-@@ -417,23 +451,19 @@
+@@ -417,23 +451,16 @@
  	if (p9_xen_trans.maxsize > XEN_FLEX_RING_SIZE(max_ring_order))
  		p9_xen_trans.maxsize = XEN_FLEX_RING_SIZE(max_ring_order) / 2;
  
@@ -154,11 +154,9 @@ Signed-off-by: Noel Jackson <noel@codewire.sh>
 -			goto error;
 +	xen_9pfs_front_free_rings(priv);
 +	ret = xen_9pfs_front_alloc_rings(dev, priv, max_ring_order);
-+	if (ret < 0) {
-+		if (new_priv)
-+			goto error_free_priv;
++	if (ret < 0)
 +		goto error;
- 	}
+-	}
  
   again:
 @@ -466,10 +496,13 @@
@@ -179,7 +177,7 @@ Signed-off-by: Noel Jackson <noel@codewire.sh>
  	}
  	ret = xenbus_transaction_end(xbt, 0);
  	if (ret) {
-@@ -479,10 +512,12 @@
+@@ -479,10 +512,19 @@
  		goto error;
  	}
  
@@ -194,18 +192,24 @@ Signed-off-by: Noel Jackson <noel@codewire.sh>
 +		write_unlock(&xen_9pfs_lock);
 +	}
  
++	/*
++	 * The backend maps ring-ref pages after observing Initialised, then
++	 * immediately reads ring_order and ref[] from the granted interface
++	 * pages. Publish the rebuilt interface contents before the xenbus
++	 * state transition makes the transport visible to dom0.
++	 */
++	virt_wmb();
  	xenbus_switch_state(dev, XenbusStateInitialised);
  	return 0;
-@@ -491,7 +526,11 @@
+@@ -491,7 +526,10 @@
  	xenbus_transaction_end(xbt, 1);
  	xenbus_dev_fatal(dev, ret, "writing xenstore");
   error:
 -	xen_9pfs_front_free(priv);
-+	xen_9pfs_front_free_rings(priv);
-+	return ret;
-+ error_free_priv:
 +	if (new_priv)
 +		xen_9pfs_front_free(priv);
++	else
++		xen_9pfs_front_free_rings(priv);
  	return ret;
  }
  

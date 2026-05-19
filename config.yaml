@@ -83,6 +83,8 @@ patches:
   upper: '6.12.74'
 - patch: 9pfs-xen-resume-reinit.patch
   lower: '6.1'
+- patch: xen-blkfront-resume-publish-rings.patch
+  lower: '6.1'
 - patch: 0002-x86-amd_node-fix-integer-divide-by-zero-during-init.patch
   lower: '6.17'
 - patch: 0003-x86-amd_node-fix-null-pointer-dereference-if-amd_smn.patch

@@ -1,0 +1,80 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Noel Jackson <noel@codewire.sh>
+Date: Tue, 19 May 2026 12:42:00 +0200
+Subject: [PATCH] xen/blkfront: recover restored transports with connected backends
+
+On PV restore, blkfront tears down the checkpointed blkif rings and
+publishes fresh ring refs/event channels to xenstore before switching the
+frontend to Initialised. blkback observes that state transition, maps the
+new rings, and can immediately serve rootfs I/O.
+
+Make the ring publication explicit with a virtual-device write barrier
+before the xenbus state transition. This matches the ring producer/consumer
+ordering used by Xen shared rings and avoids restore races where blkback
+sees the state edge before the rebuilt ring metadata is globally visible.
+
+Also complete blkfront recovery immediately when the restored backend is
+already Connected after talk_to_blkback(). Restore can recreate frontend
+transport state while the backend state node is already at Connected; relying
+only on a later xenbus watch edge can leave blk-mq queues stopped and wedge
+the first post-restore rootfs I/O. Reading the backend state after publishing
+the rebuilt frontend transport makes the resume path deterministic while the
+normal watch callback remains harmless if it arrives later.
+
+Signed-off-by: Noel Jackson <noel@codewire.sh>
+---
+ drivers/block/xen-blkfront.c | 24 ++++++++++++++++++++++++
+ 1 file changed, 24 insertions(+)
+
+diff --git a/drivers/block/xen-blkfront.c b/drivers/block/xen-blkfront.c
+index 3c5a23b1a4c1..c4257d6398a9 100644
+--- a/drivers/block/xen-blkfront.c
++++ b/drivers/block/xen-blkfront.c
+@@ -1878,6 +1878,15 @@ static int talk_to_blkback(struct xenbus_device *dev,
+ 			rinfo->shadow[j].req.u.rw.id = j + 1;
+ 		rinfo->shadow[BLK_RING_SIZE(info)-1].req.u.rw.id = 0x0fffffff;
+ 	}
++
++	/*
++	 * blkback maps fresh ring refs after observing Initialised, then can
++	 * immediately service rootfs I/O. Publish the rebuilt ring state before
++	 * the xenbus transition makes the transport visible to dom0. This is
++	 * especially important after PV restore, where the checkpointed rings
++	 * were torn down and replaced in-place.
++	 */
++	virt_wmb();
+ 	xenbus_switch_state(dev, XenbusStateInitialised);
+ 
+ 	return 0;
+@@ -2059,7 +2068,9 @@ static int blkif_recover(struct blkfront_info *info)
+  * driver restart.  We tear down our blkif structure and recreate it, but
+  * leave the device-layer structures intact so that this is transparent to the
+  * rest of the kernel.
+  */
++static void blkfront_connect(struct blkfront_info *info);
++
+ static int blkfront_resume(struct xenbus_device *dev)
+ {
+ 	struct blkfront_info *info = dev_get_drvdata(&dev->dev);
+@@ -2108,6 +2117,19 @@ static int blkfront_resume(struct xenbus_device *dev)
+ 	if (!err)
+ 		blk_mq_update_nr_hw_queues(&info->tag_set, info->nr_rings);
+ 
++	/*
++	 * Restore can rebuild the frontend transport while the backend state
++	 * is already Connected. If no new xenbus edge is delivered, waiting for
++	 * blkback_changed() leaves blk-mq queues stopped after blkif_free().
++	 * Complete the recovery here when the backend is visibly ready; a later
++	 * Connected callback is idempotent and will only refresh capacity.
++	 */
++	if (!err && xenbus_read_driver_state(dev->otherend) == XenbusStateConnected) {
++		dev_info(&dev->dev,
++			 "backend already Connected during resume; completing blkfront recovery\n");
++		blkfront_connect(info);
++	}
++
+ 	/*
+ 	 * We have to wait for the backend to switch to
+ 	 * connected state, since we want to read which
+-- 
+2.43.0

@@ -1,0 +1,37 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Juergen Gross <jgross@suse.com>
+Date: Thu, 18 Dec 2025 16:48:14 +0100
+Subject: [PATCH] xen/9pfs: Fix data ring granting
+
+xen_9pfs_front_alloc_dataring() grants backend access to the data ring
+by granting each memory page of the ring.
+
+The pages passed to gnttab_grant_foreign_access() are not referenced by
+consecutive PFNs, but by GFNs, which might not be consecutive when the
+system is running as a PV guest.
+
+Fix that by not using "virt_to_gfn(bytes) + i" as parameter, but
+"pfn_to_gfn(virt_to_pfn(bytes) + i)" instead.
+
+This is the upstream Linux fix carried locally until our 6.19 zone kernel
+source includes it.
+
+Signed-off-by: Juergen Gross <jgross@suse.com>
+---
+ net/9p/trans_xen.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/net/9p/trans_xen.c b/net/9p/trans_xen.c
+index 12f752a92332..a2ab633e78be 100644
+--- a/net/9p/trans_xen.c
++++ b/net/9p/trans_xen.c
+@@ -347,7 +347,8 @@ static int xen_9pfs_front_alloc_dataring(struct xenbus_device *dev,
+ 	}
+ 	for (; i < (1 << order); i++) {
+ 		ret = gnttab_grant_foreign_access(
+-				dev->otherend_id, virt_to_gfn(bytes) + i, 0);
++				dev->otherend_id,
++				pfn_to_gfn(virt_to_pfn(bytes) + i), 0);
+ 		if (ret < 0)
+ 			goto out;
+ 		ring->intf->ref[i] = ret;
